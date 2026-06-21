@@ -45,6 +45,9 @@ reads the password directly from the terminal. The password never passes through
 claude-schedule. Same trust model as Homebrew or any installer that calls sudo. And by
 default claude-schedule doesn't even run sudo for you (see below).
 
+Stored jobs and logs are kept owner-only too: the config dir is `0700` and job specs / logs
+are `0600`, so your prompts and run output aren't readable by other users on a shared machine.
+
 ## Arming the wake
 
 By default `add` does **not** run sudo. It installs the scheduler (no privileges needed) and

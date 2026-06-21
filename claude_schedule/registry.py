@@ -9,6 +9,7 @@ Layout (override the root with ``$CLAUDE_SCHEDULE_HOME``)::
 
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 from pathlib import Path
@@ -30,16 +31,27 @@ def config_home() -> Path:
     return base / APP_NAME
 
 
+def _ensure_private_dir(p: Path) -> Path:
+    """Create p and tighten it to 0700 so other local users can't read stored jobs/logs.
+    Best-effort: chmod is a no-op on Windows, where the user profile is already private."""
+    p.mkdir(parents=True, exist_ok=True)
+    with contextlib.suppress(OSError):
+        p.chmod(0o700)
+    return p
+
+
+def app_subdir(name: str) -> Path:
+    """A private (0700) subdir of config_home; config_home itself is tightened too."""
+    _ensure_private_dir(config_home())
+    return _ensure_private_dir(config_home() / name)
+
+
 def jobs_dir() -> Path:
-    d = config_home() / "jobs"
-    d.mkdir(parents=True, exist_ok=True)
-    return d
+    return app_subdir("jobs")
 
 
 def logs_dir() -> Path:
-    d = config_home() / "logs"
-    d.mkdir(parents=True, exist_ok=True)
-    return d
+    return app_subdir("logs")
 
 
 def job_file(name: str) -> Path:
@@ -53,6 +65,8 @@ def default_log_path(name: str) -> str:
 def save_job(job: JobSpec) -> Path:
     p = job_file(job.name)
     p.write_text(json.dumps(job.to_dict(), indent=2) + "\n", encoding="utf-8")
+    with contextlib.suppress(OSError):  # the prompt can be sensitive; keep it owner-only
+        p.chmod(0o600)
     return p
 
 

@@ -28,6 +28,9 @@ Initial release.
     reads or stores the password — `sudo` prompts on the terminal directly.
   - Unattended runs default to `--permission-mode auto`: autonomous on safe steps, aborts
     on risky ones. No `--dangerously-skip-permissions` flag.
+  - Stored jobs and logs are owner-only: config dirs created `0700`, job specs and logs
+    `0600` (best-effort; no-op on Windows). Keeps prompts and run output off other local
+    users on shared machines.
   - Keep-awake during runs (`caffeinate` / `systemd-inhibit` / Windows API) and an
     in-process timeout (no external `timeout`/`gtimeout` dependency).
   - OS / scheduler / wake / privilege auto-detection with explicit overrides.

@@ -9,6 +9,7 @@ Responsibilities, all portable and dependency-free:
 
 from __future__ import annotations
 
+import contextlib
 import os
 import shutil
 import signal
@@ -138,6 +139,9 @@ def run_job(name: str) -> int:
     job = registry.load_job(name)
     # log stays open for the whole run, closed in finally; a context manager doesn't fit the stdout fallback
     log: TextIO = open(job.log_path, "a", encoding="utf-8") if job.log_path else sys.stdout  # noqa: SIM115
+    if log is not sys.stdout:
+        with contextlib.suppress(OSError):  # output can contain repo secrets; keep it owner-only
+            os.chmod(job.log_path, 0o600)
 
     def w(msg: str) -> None:
         log.write(msg + "\n")

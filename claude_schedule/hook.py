@@ -29,7 +29,7 @@ import time
 from pathlib import Path
 
 from claude_schedule.jobspec import DAY_LETTERS, NAME_RE
-from claude_schedule.registry import config_home
+from claude_schedule.registry import app_subdir
 
 _CRON_KEYS = ("cron", "schedule", "expression", "cronExpression", "cron_expression", "crontab")
 _PROMPT_KEYS = ("prompt", "task", "message", "text", "instruction")
@@ -110,9 +110,7 @@ def _emit(obj: dict) -> None:
 
 def _marker(session: str, cron: str) -> Path:
     h = hashlib.sha1(f"{session}:{cron}".encode()).hexdigest()[:16]
-    d = config_home() / "hookstate"
-    d.mkdir(parents=True, exist_ok=True)
-    return d / h
+    return app_subdir("hookstate") / h
 
 
 def _recently_denied(session: str, cron: str, ttl: int = 120) -> bool:
