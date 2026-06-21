@@ -256,10 +256,10 @@ def cmd_remove(args: argparse.Namespace) -> int:
     if wake.supported:
         remaining = [j for j in registry.list_jobs() if j.wake]
         if remaining:
-            _apply_wake(remaining, getattr(args, "arm_wake", False), wake)
+            _apply_wake(remaining, args.arm_wake, wake)
         elif job and job.wake:
             # only touch the shared wake slot if this job actually armed one; plan([]) shows the cancel command
-            _apply_wake([], getattr(args, "arm_wake", False), wake)
+            _apply_wake([], args.arm_wake, wake)
     return 0
 
 
