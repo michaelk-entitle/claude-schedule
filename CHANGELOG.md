@@ -23,7 +23,11 @@ Initial release.
   - Scheduler backends: launchd (macOS), systemd user timer (Linux), cron (fallback),
     Task Scheduler (Windows).
   - Wake backends: `pmset` (macOS), `rtcwake` (Linux, best-effort), Task Scheduler
-    WakeToRun (Windows).
+    WakeToRun (Windows). Wake arming defaults to **printing** the one privileged command
+    for the user to run; `--arm-wake` runs it (single sudo prompt). claude-schedule never
+    reads or stores the password — `sudo` prompts on the terminal directly.
+  - Unattended runs default to `--permission-mode auto`: autonomous on safe steps, aborts
+    on risky ones. No `--dangerously-skip-permissions` flag.
   - Keep-awake during runs (`caffeinate` / `systemd-inhibit` / Windows API) and an
     in-process timeout (no external `timeout`/`gtimeout` dependency).
   - OS / scheduler / wake / privilege auto-detection with explicit overrides.

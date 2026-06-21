@@ -10,8 +10,8 @@ Responsibilities, all portable and dependency-free:
 from __future__ import annotations
 
 import os
-import signal
 import shutil
+import signal
 import subprocess
 import sys
 from datetime import datetime
@@ -32,8 +32,6 @@ def build_claude_argv(job: JobSpec) -> list[str]:
         argv += ["--model", job.model]
     if job.permission_mode:
         argv += ["--permission-mode", job.permission_mode]
-    if job.skip_permissions:
-        argv.append("--dangerously-skip-permissions")
     if job.allowed_tools:
         argv += ["--allowed-tools", job.allowed_tools]
     if job.bare:
@@ -138,7 +136,8 @@ def _run_with_timeout(argv: list[str], cwd: str, env: dict[str, str], timeout: i
 def run_job(name: str) -> int:
     """Run a stored job now. Returns the process exit code (124 on timeout)."""
     job = registry.load_job(name)
-    log: TextIO = open(job.log_path, "a", encoding="utf-8") if job.log_path else sys.stdout
+    # log stays open for the whole run, closed in finally; a context manager doesn't fit the stdout fallback
+    log: TextIO = open(job.log_path, "a", encoding="utf-8") if job.log_path else sys.stdout  # noqa: SIM115
 
     def w(msg: str) -> None:
         log.write(msg + "\n")

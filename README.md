@@ -42,7 +42,7 @@ claude-schedule: ✋ denies the ephemeral schedule, tells Claude:
 Claude: "What timeout should it have? (default 30m)"  →  you answer  →  Claude runs the command
       │
       ▼
-A persistent launchd job is installed + a wake is armed. Done.
+A persistent launchd job is installed; the one-time wake command is printed for you. Done.
 ```
 
 At the scheduled time:
@@ -130,11 +130,11 @@ Add `--dry-run` to `add` to preview without changing anything.
 | `--days` | `daily` | `MTWRFSU` letters, or `daily` / `weekdays` / `weekends` |
 | `--timeout` | `30m` | `30m`, `1h`, `1h30m`, `90s`, or `0` for none |
 | `--wake-before` | `1m` | wake this long before the run |
-| `--no-wake` | off | don't arm a wake (rely on scheduler catch-up) |
+| `--no-wake` | off | don't arm a wake at all (rely on scheduler catch-up) |
+| `--arm-wake` | off | run the privileged wake command for you (one sudo prompt); default prints it to run yourself |
 | `--repo` | cwd | working directory for the run |
 | `--prompt` / `--prompt-file` | — | the task (exactly one) |
-| `--permission-mode` | claude default | `acceptEdits` / `bypassPermissions` / … (see below) |
-| `--dangerously-skip-permissions` | off | full autonomy; cannot run as root |
+| `--permission-mode` | `auto` | `auto` / `default` / `acceptEdits` / `plan` / `bypassPermissions` (see below) |
 | `--allowed-tools` | — | e.g. `"Bash(git *),Read,Edit"` |
 | `--model` | claude default | `sonnet` / `opus` / `haiku` / `fable` or full name |
 | `--bare` | off | skip repo CLAUDE.md/MCP/hooks (needs `ANTHROPIC_API_KEY`) |
@@ -146,14 +146,14 @@ Add `--dry-run` to `add` to preview without changing anything.
 
 ## Permissions (important for unattended runs)
 
-By default a scheduled job uses Claude's **read-only** permissions and **aborts** on the
-first action that needs approval (it does *not* hang — there's no one to prompt). To let a
-job actually edit files or run commands, choose one:
+Scheduled jobs default to **`--permission-mode auto`**: Claude acts autonomously on safe
+steps and **aborts** on anything risky (it does *not* hang — there's no one to prompt). This
+keeps unattended jobs useful out of the box without the all-or-nothing
+`--dangerously-skip-permissions` bypass. To change the posture:
 
-- `--permission-mode acceptEdits` — auto-approve file edits + common fs commands.
-- `--allowed-tools "Bash(git *),Read,Edit"` — granular pre-approval.
-- `--dangerously-skip-permissions` — full autonomy. Only on a machine you trust; it refuses
-  to start as root.
+- `--permission-mode default` — read-only; aborts on the first action needing approval.
+- `--permission-mode plan` — dry-run only, makes no changes.
+- `--allowed-tools "Bash(git *),Read,Edit"` — narrow the autonomy to specific tools.
 
 ---
 
@@ -172,7 +172,10 @@ job actually edit files or run commands, choose one:
   mean *asleep*. This is a hardware limitation, not a bug. Keep laptops on **AC power**
   (lid-closed on AC is fine).
 - macOS exposes exactly **one** repeating wake slot; claude-schedule manages it as the
-  union of all your wake-enabled jobs. Arming it needs `sudo` once (you're prompted at `add`).
+  union of all your wake-enabled jobs. Arming it needs root, so by default `add` **prints**
+  the one `sudo pmset …` command for you to run yourself (pass `--arm-wake` to have it run
+  for you). **claude-schedule never sees or stores your password** — `sudo` reads it directly
+  from the terminal, same as Homebrew. See [troubleshooting](docs/troubleshooting.md).
 - On Linux, user `systemd` timers can't wake the machine; reliable wake needs a BIOS/RTC
   schedule. The timer uses `Persistent=true`, so a missed run fires as soon as the machine
   is next awake.

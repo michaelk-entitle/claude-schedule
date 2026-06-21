@@ -31,7 +31,8 @@ def build_report(env: Environment) -> tuple[list[str], bool]:
 
     out.append("")
     out.append("Claude Code")
-    out.append(_line(_mark(bool(env.claude_path)), "claude binary", env.claude_path or "NOT FOUND (install Claude Code, or pass --claude)"))
+    claude_status = env.claude_path or "NOT FOUND (install Claude Code, or pass --claude)"
+    out.append(_line(_mark(bool(env.claude_path)), "claude binary", claude_status))
     if env.claude_version:
         out.append(_line(OK, "version", env.claude_version))
 
@@ -47,9 +48,9 @@ def build_report(env: Environment) -> tuple[list[str], bool]:
     out.append("Wake support")
     out.append(_line(_mark(env.default_wake != "none"), "chosen wake", env.default_wake))
     if env.system == "macos":
-        out.append(_line(_mark(env.has_pmset), "pmset", "needs sudo to arm a wake (you'll be prompted at 'add')"))
+        out.append(_line(_mark(env.has_pmset), "pmset", "wake needs root; 'add' prints the command (or --arm-wake)"))
     if env.system == "linux":
-        out.append(_line(_mark(env.has_rtcwake), "rtcwake", "best-effort one-shot; relies on systemd Persistent catch-up"))
+        out.append(_line(_mark(env.has_rtcwake), "rtcwake", "best-effort; relies on systemd Persistent catch-up"))
 
     out.append("")
     out.append("Keep-awake during run")
@@ -86,8 +87,8 @@ def _gotchas(env: Environment) -> list[str]:
         g.append("To run while logged out: loginctl enable-linger $USER")
     if env.system == "windows":
         g.append("Enable 'Allow wake timers' in the active power plan for WakeToRun to work.")
-    g.append("Unattended runs use Claude's default (read-only) permissions and ABORT on the first action that needs "
-             "approval. To let a job edit/run, pass --permission-mode acceptEdits or --dangerously-skip-permissions.")
+    g.append("Unattended runs default to --permission-mode auto: Claude acts autonomously on safe steps and ABORTS "
+             "on anything risky (no TTY to prompt). Use --permission-mode default for read-only, or plan to dry-run.")
     return g
 
 

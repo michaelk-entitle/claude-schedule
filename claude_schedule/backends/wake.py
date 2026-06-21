@@ -65,7 +65,7 @@ class MacWake(WakeBackend):
             False,
             [
                 "macOS has ONE repeating wake slot; claude-schedule manages it as the union of all wake jobs.",
-                "Requires sudo (you will be prompted). Apple Silicon wakes from SLEEP only, never from shutdown.",
+                "Needs root to arm (run the command above, or pass --arm-wake). Apple Silicon wakes from SLEEP only.",
             ],
         )
 
@@ -111,7 +111,9 @@ class LinuxWake(WakeBackend):
             return WakeResult(self.name, [], False, ["could not compute next wake"])
         cmd = ["sudo", "rtcwake", "-m", "no", "-t", str(epoch)]
         r = subprocess.run(cmd)
-        return WakeResult(self.name, [" ".join(cmd)], r.returncode == 0, ["One-shot alarm armed for the next run only."])
+        return WakeResult(
+            self.name, [" ".join(cmd)], r.returncode == 0, ["One-shot alarm armed for the next run only."]
+        )
 
     def clear(self) -> WakeResult:
         subprocess.run(["sudo", "rtcwake", "-m", "disable"])

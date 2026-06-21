@@ -107,8 +107,7 @@ class JobSpec:
     prompt_file: str | None = None
     repo: str | None = None
     model: str | None = None
-    permission_mode: str | None = None
-    skip_permissions: bool = False
+    permission_mode: str = "auto"  # autonomous by default: auto-approves safe actions, aborts on risky ones
     allowed_tools: str | None = None
     bare: bool = False
     output_format: str | None = None
@@ -171,7 +170,7 @@ class JobSpec:
         return d
 
     @classmethod
-    def from_dict(cls, d: dict) -> "JobSpec":
+    def from_dict(cls, d: dict) -> JobSpec:
         d = dict(d)
         d["days"] = tuple(d.get("days", ()))
         known = {f.name for f in dataclasses.fields(cls)}

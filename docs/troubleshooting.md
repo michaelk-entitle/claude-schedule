@@ -25,30 +25,39 @@ pass `--claude /abs/path/to/claude`.
 
 ## The run aborts immediately / does nothing useful
 
-Unattended jobs use Claude's **read-only** permissions by default and abort on the first
-action needing approval. Give the job permission to act:
+Unattended jobs default to `--permission-mode auto`: Claude acts autonomously on safe steps
+and aborts on anything risky. Change the posture if you want:
 
 ```bash
-claude-schedule add … --permission-mode acceptEdits          # file edits
-claude-schedule add … --allowed-tools "Bash(git *),Read,Edit"  # granular
-claude-schedule add … --dangerously-skip-permissions          # full autonomy (trusted machine; not root)
+claude-schedule add … --permission-mode default              # read-only (aborts on first action)
+claude-schedule add … --permission-mode plan                 # dry-run only
+claude-schedule add … --allowed-tools "Bash(git *),Read,Edit"  # narrow the autonomy
 ```
 
 If you use `--bare`, Claude skips repo CLAUDE.md/MCP/hooks **and** keychain auth — set
 `ANTHROPIC_API_KEY` (e.g. via `--env-file`).
 
-## It keeps asking for a sudo password
+## Does claude-schedule have my (or my users') password?
 
-Arming a macOS/Linux wake needs root once. At `add` time you're prompted interactively.
-If you're in a non-interactive context or decline, the scheduler is still installed — only
-the wake isn't armed, and you'll see the exact command to run yourself:
+**No.** It never reads, stores, logs, or transmits a password. Arming a wake on macOS/Linux
+needs root, so it runs `sudo pmset …` / `sudo rtcwake …` — and `sudo` (the OS's own program)
+reads the password directly from the terminal. The password never passes through
+claude-schedule. Same trust model as Homebrew or any installer that calls sudo. And by
+default claude-schedule doesn't even run sudo for you (see below).
+
+## Arming the wake
+
+By default `add` does **not** run sudo. It installs the scheduler (no privileges needed) and
+**prints** the one privileged command for you to run once yourself:
 
 ```bash
-sudo pmset repeat wakeorpoweron MTWRF 08:59:00   # macOS example
+sudo pmset repeat wakeorpoweron MTWRF 08:59:00   # macOS example — run this once to enable wake
 ```
 
-Use `--no-wake` to skip wake entirely and rely on the scheduler's catch-up (launchd /
-systemd `Persistent`) when the machine is next awake.
+Run that and wake-from-sleep is enabled (it persists forever; you won't be asked again).
+Prefer claude-schedule to run it for you? Pass `--arm-wake` and you'll get a single sudo
+prompt. Don't want self-wake at all? Use `--no-wake` and rely on launchd/systemd catch-up
+(the job runs when the machine is next awake).
 
 ## The wake doesn't happen (macOS)
 

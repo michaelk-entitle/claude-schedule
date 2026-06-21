@@ -80,7 +80,11 @@ def _extract(tool_input: dict) -> tuple[str | None, str | None, bool]:
     cron = first(_CRON_KEYS)
     prompt = first(_PROMPT_KEYS)
     recurring = first(_RECUR_KEYS)
-    return (str(cron) if cron else None, str(prompt) if prompt else None, True if recurring is None else bool(recurring))
+    return (
+        str(cron) if cron else None,
+        str(prompt) if prompt else None,
+        True if recurring is None else bool(recurring),
+    )
 
 
 def _slug(text: str, fallback: str = "claude-job") -> str:

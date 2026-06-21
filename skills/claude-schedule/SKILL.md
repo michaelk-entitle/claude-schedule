@@ -39,12 +39,11 @@ changing anything.
 `M`=Mon `T`=Tue `W`=Wed `R`=Thu `F`=Fri `S`=Sat `U`=Sun. Aliases: `daily`, `weekdays`, `weekends`.
 
 ## Permissions for unattended runs
-By default the job runs with Claude's read-only permissions and aborts on the first edit
-or command that needs approval. To let it act, add ONE of:
-- `--permission-mode acceptEdits` — file edits without prompts.
-- `--allowed-tools "Bash(git *),Read,Edit"` — granular pre-approval.
-- `--dangerously-skip-permissions` — full autonomy; only on a trusted machine (it refuses
-  to run as root).
+Jobs default to `--permission-mode auto`: Claude acts autonomously on safe steps and aborts
+on anything risky (no TTY to prompt). To change it:
+- `--permission-mode default` — read-only; aborts on the first action needing approval.
+- `--permission-mode plan` — dry-run only.
+- `--allowed-tools "Bash(git *),Read,Edit"` — narrow the autonomy to specific tools.
 
 ## Managing jobs
 - `claude-schedule list` — jobs and whether they are installed.
@@ -53,5 +52,7 @@ or command that needs approval. To let it act, add ONE of:
 - `claude-schedule doctor` — OS / scheduler / wake support and gotchas.
 
 ## macOS note
-Arming the wake needs `sudo` once (the user is prompted at `add`). Apple Silicon wakes
-from **sleep** only — it cannot power on from a full shutdown. Keep laptops on AC power.
+Arming the wake needs root once. By default `add` prints the `sudo pmset …` command for the
+user to run themselves (pass `--arm-wake` to have the CLI run it). claude-schedule never sees
+the password — `sudo` reads it directly. Apple Silicon wakes from **sleep** only — it cannot
+power on from a full shutdown. Keep laptops on AC power.

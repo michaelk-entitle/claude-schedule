@@ -37,23 +37,32 @@ def _add_common_job_args(p: argparse.ArgumentParser) -> None:
     p.add_argument("--repo", help="working directory for the run (default: current directory)")
     p.add_argument("--timeout", default="30m", help="max run time: 30m, 1h, 1h30m, or 0 for none (default 30m)")
     p.add_argument("--wake-before", default="1m", help="wake the machine this long before the run (default 1m)")
-    p.add_argument("--no-wake", action="store_true", help="do not schedule a wake")
-    p.add_argument("--model", help="claude model alias (sonnet/opus/haiku/fable) or full name")
-    p.add_argument("--permission-mode", help="default|acceptEdits|plan|auto|dontAsk|bypassPermissions")
+    p.add_argument("--no-wake", action="store_true", help="do not schedule a wake at all")
     p.add_argument(
-        "--dangerously-skip-permissions",
+        "--arm-wake",
         action="store_true",
-        dest="skip_permissions",
-        help="run claude with --dangerously-skip-permissions (full autonomy; cannot run as root)",
+        help="run the privileged wake command for you (one sudo prompt); default just prints it to run yourself",
+    )
+    p.add_argument("--model", help="claude model alias (sonnet/opus/haiku/fable) or full name")
+    p.add_argument(
+        "--permission-mode",
+        default="auto",
+        help="default|acceptEdits|plan|auto|dontAsk|bypassPermissions (default: auto)",
     )
     p.add_argument("--allowed-tools", help="pre-approve tools, e.g. 'Bash,Read,Edit' or 'Bash(git *),Read'")
-    p.add_argument("--bare", action="store_true", help="claude --bare: skip repo CLAUDE.md/MCP/hooks (needs ANTHROPIC_API_KEY)")
+    p.add_argument(
+        "--bare", action="store_true",
+        help="claude --bare: skip repo CLAUDE.md/MCP/hooks (needs ANTHROPIC_API_KEY)",
+    )
     p.add_argument("--output-format", choices=["text", "json", "stream-json"], help="claude --output-format")
     p.add_argument("--env-file", help="file of KEY=VALUE lines to load before running")
     p.add_argument("--log", help="log file path (default: <config>/logs/<name>.log)")
     p.add_argument("--backend", choices=["launchd", "cron", "systemd", "schtasks"], help="override the scheduler")
     p.add_argument("--claude", help="path to the claude binary (default: auto-detect)")
-    p.add_argument("--claude-arg", action="append", default=[], dest="extra_args", help="extra arg passed to claude (repeatable)")
+    p.add_argument(
+        "--claude-arg", action="append", default=[], dest="extra_args",
+        help="extra arg passed to claude (repeatable)",
+    )
     p.add_argument("--dry-run", action="store_true", help="print what would be created; change nothing")
     p.add_argument("--force", action="store_true", help="replace an existing job with the same name")
 
@@ -97,7 +106,6 @@ def _build_job(args: argparse.Namespace, env: Environment) -> JobSpec:
         repo=_abs(args.repo) or os.getcwd(),
         model=args.model,
         permission_mode=args.permission_mode,
-        skip_permissions=args.skip_permissions,
         allowed_tools=args.allowed_tools,
         bare=args.bare,
         output_format=args.output_format,
@@ -120,7 +128,9 @@ def _build_job(args: argparse.Namespace, env: Environment) -> JobSpec:
 
 def _print_dry_run(job: JobSpec, scheduler: SchedulerBackend, wake: WakeBackend, run_argv: list[str]) -> None:
     print("DRY RUN — nothing will be changed.\n")
-    print(f"Job '{job.name}': {job.schedule_summary()}  (backend={scheduler.name}, wake={'on' if job.wake else 'off'}, timeout={format_duration(job.timeout_seconds)})")
+    wake_s = "on" if job.wake else "off"
+    print(f"Job '{job.name}': {job.schedule_summary()}  "
+          f"(backend={scheduler.name}, wake={wake_s}, timeout={format_duration(job.timeout_seconds)})")
     print(f"claude argv: {build_claude_argv(job)}")
     print(f"scheduler invokes: {' '.join(run_argv)}\n")
     for art in scheduler.generate(job, run_argv):
@@ -157,6 +167,24 @@ def _print_wake_result(wr: WakeResult) -> None:
         print(f"    note: {note}")
 
 
+def _apply_wake(jobs: list[JobSpec], arm: bool, wake: WakeBackend) -> None:
+    """Arm the wake only if explicitly asked (--arm-wake); otherwise print the one
+    privileged command for the user to run themselves. claude-schedule never reads
+    or stores the password either way — sudo prompts on the terminal directly."""
+    if arm:
+        _print_wake_result(wake.sync(jobs))
+        return
+    wr = wake.plan(jobs)
+    if wr.commands:
+        print("  wake: not armed (no password needed). To wake the machine from sleep, run this once yourself:")
+        for c in wr.commands:
+            print(f"    $ {c}")
+        print("    The password goes straight to sudo — claude-schedule never sees it. "
+              "(Or re-run with --arm-wake to have it run for you.)")
+    for note in wr.notes:
+        print(f"    note: {note}")
+
+
 # -- command handlers -----------------------------------------------------
 
 
@@ -178,7 +206,7 @@ def cmd_add(args: argparse.Namespace, dry: bool = False) -> int:
     _print_install_result(job, scheduler.install(job, run_argv))
 
     if job.wake and wake.supported:
-        _print_wake_result(wake.sync([j for j in registry.list_jobs() if j.wake]))
+        _apply_wake([j for j in registry.list_jobs() if j.wake], args.arm_wake, wake)
     elif job.wake:
         print(f"  wake: not supported on {env.system}; relying on scheduler catch-up.")
 
@@ -228,10 +256,10 @@ def cmd_remove(args: argparse.Namespace) -> int:
     if wake.supported:
         remaining = [j for j in registry.list_jobs() if j.wake]
         if remaining:
-            _print_wake_result(wake.sync(remaining))
+            _apply_wake(remaining, getattr(args, "arm_wake", False), wake)
         elif job and job.wake:
-            # only touch the shared wake slot if this job actually armed one
-            _print_wake_result(wake.clear())
+            # only touch the shared wake slot if this job actually armed one; plan([]) shows the cancel command
+            _apply_wake([], getattr(args, "arm_wake", False), wake)
     return 0
 
 
@@ -249,7 +277,9 @@ def cmd_list(args: argparse.Namespace) -> int:
         mark = "●" if installed else "○"
         preview = (j.prompt or (f"@{j.prompt_file}" if j.prompt_file else "")).replace("\n", " ")[:60]
         print(f"{mark} {j.name}")
-        print(f"    when:    {j.schedule_summary()}   backend={j.backend}  wake={'on' if j.wake else 'off'}  timeout={format_duration(j.timeout_seconds)}")
+        wake_s = "on" if j.wake else "off"
+        print(f"    when:    {j.schedule_summary()}   backend={j.backend}  "
+              f"wake={wake_s}  timeout={format_duration(j.timeout_seconds)}")
         print(f"    repo:    {j.repo}")
         print(f"    prompt:  {preview}")
         print(f"    log:     {j.log_path}")
@@ -318,6 +348,10 @@ def build_parser() -> argparse.ArgumentParser:
 
     prm = sub.add_parser("remove", aliases=["rm"], help="remove a job")
     prm.add_argument("--name", required=True)
+    prm.add_argument(
+        "--arm-wake", action="store_true",
+        help="run the privileged wake re-sync for you (sudo); default prints it",
+    )
     prm.set_defaults(func=cmd_remove)
 
     sub.add_parser("list", aliases=["ls"], help="list jobs").set_defaults(func=cmd_list)

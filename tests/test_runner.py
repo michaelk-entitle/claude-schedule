@@ -11,7 +11,8 @@ def _job(**over):
 
 
 def test_build_argv_minimal():
-    assert build_claude_argv(_job()) == ["/bin/echo", "-p", "hi"]
+    # autonomous by default: --permission-mode auto, no dangerous bypass
+    assert build_claude_argv(_job()) == ["/bin/echo", "-p", "hi", "--permission-mode", "auto"]
 
 
 def test_build_argv_all_flags():
@@ -19,7 +20,6 @@ def test_build_argv_all_flags():
         _job(
             model="sonnet",
             permission_mode="acceptEdits",
-            skip_permissions=True,
             allowed_tools="Bash,Read",
             bare=True,
             output_format="json",
@@ -29,7 +29,7 @@ def test_build_argv_all_flags():
     assert argv[:3] == ["/bin/echo", "-p", "hi"]
     assert argv[argv.index("--model") + 1] == "sonnet"
     assert argv[argv.index("--permission-mode") + 1] == "acceptEdits"
-    assert "--dangerously-skip-permissions" in argv
+    assert "--dangerously-skip-permissions" not in argv
     assert argv[argv.index("--allowed-tools") + 1] == "Bash,Read"
     assert "--bare" in argv
     assert argv[argv.index("--output-format") + 1] == "json"
