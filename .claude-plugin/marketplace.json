@@ -1,0 +1,11 @@
+{
+  "name": "claude-schedule",
+  "owner": { "name": "Michael Kosoy" },
+  "plugins": [
+    {
+      "name": "claude-schedule",
+      "source": "./",
+      "description": "Persistent local schedules for Claude Code jobs (wake + keep-awake + timeout)."
+    }
+  ]
+}
