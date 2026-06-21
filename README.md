@@ -15,8 +15,9 @@ It comes in two halves:
    a hook steps in, asks you for a timeout, and installs a **persistent** OS-level job in
    place of the ephemeral session-scoped one. You never call a CLI by hand.
 2. **A standalone CLI engine** (`claude-schedule`) that does the actual wrapping —
-   detects your OS, picks the right scheduler, arms a wake, keeps the machine awake during
-   the run, and enforces a timeout. You can also drive it directly.
+   detects your OS, picks the right scheduler, sets up a wake (it prints the one privileged
+   command for you to run, or runs it with `--arm-wake`), keeps the machine awake during the
+   run, and enforces a timeout. You can also drive it directly.
 
 > **Why this exists:** Claude Code's built-in `/loop` jobs only fire while the session is
 > open and the machine is awake; cloud Routines run remotely and can't touch your local
@@ -116,7 +117,7 @@ Other commands:
 | `claude-schedule list` | list jobs and whether each is installed |
 | `claude-schedule run-now --name X` | run a job immediately (ignores schedule) |
 | `claude-schedule logs --name X` | show the tail of a job's log |
-| `claude-schedule remove --name X` | uninstall a job (and re-sync wake) |
+| `claude-schedule remove --name X` | uninstall a job (and update the wake slot) |
 | `claude-schedule generate ...` | print the exact plist/crontab/units + wake command (dry run) |
 | `claude-schedule doctor` | OS / scheduler / wake / timeout support and gotchas |
 
@@ -154,6 +155,11 @@ keeps unattended jobs useful out of the box without the all-or-nothing
 - `--permission-mode default` — read-only; aborts on the first action needing approval.
 - `--permission-mode plan` — dry-run only, makes no changes.
 - `--allowed-tools "Bash(git *),Read,Edit"` — narrow the autonomy to specific tools.
+
+Stored data is private by default. Job specs and logs live under `~/.config/claude-schedule`
+(`%APPDATA%` on Windows) with owner-only permissions (`0700` dirs, `0600` files), so your
+prompts and run output aren't readable by other local users on a shared machine. And arming a
+wake never goes through claude-schedule — `sudo` reads your password directly (see below).
 
 ---
 
