@@ -11,8 +11,10 @@ hand. Two events:
   short ``/loop`` mechanism keeps working.
 
 * ``UserPromptSubmit`` — if the user invokes ``/schedule`` (cloud Routines, which run
-  remotely and don't use this machine), add a non-blocking note offering the local
-  wrapper instead. We never block cloud routines.
+  remotely and don't use this machine), inject context steering Claude to set up a
+  persistent LOCAL job via ``claude-schedule add`` instead, unless the user explicitly
+  wants cloud execution. This is a steer (cloud routine creation isn't a tool call, so it
+  can't be hard-blocked by a hook) — we never silently break a genuinely-wanted cloud routine.
 
 Hooks have no TTY (can't prompt) and can't call tools, so all steering is plain text
 Claude reads. Anything we don't understand → stay silent (exit 0) so native scheduling
@@ -173,10 +175,17 @@ def _handle_userprompt(data: dict) -> int:
             "hookSpecificOutput": {
                 "hookEventName": "UserPromptSubmit",
                 "additionalContext": (
-                    "Note: /schedule creates a CLOUD routine on Anthropic infrastructure — it does not "
-                    "use this machine, its files, or local MCP servers. If the user wants the job to run "
-                    "LOCALLY here with full repo + MCP access, offer to set it up with the claude-schedule "
-                    "wrapper (claude-schedule add ...) instead."
+                    "The user invoked /schedule. /schedule creates a CLOUD routine that runs remotely on "
+                    "Anthropic infrastructure with NO access to this machine, its repository, or local MCP "
+                    "servers. On a developer's own machine the intent is almost always to run LOCALLY (full "
+                    "repo + MCP + local files). So unless the user EXPLICITLY asks for a cloud/remote routine "
+                    "(e.g. 'run in the cloud' or 'while my laptop is closed'), do NOT create a cloud routine. "
+                    "Instead set up a persistent LOCAL job:\n"
+                    "1. Confirm the time and days, and ask what timeout it should have (suggest 30m).\n"
+                    "2. Run in Bash, replacing <TIMEOUT> with their answer:\n"
+                    "     claude-schedule add --name <short-slug> --time HH:MM --days <MTWRFSU|daily|weekdays> "
+                    "--prompt '<the task>' --timeout <TIMEOUT>\n"
+                    "Only if the user truly wants cloud execution, let the native /schedule routine proceed."
                 ),
             }
         }

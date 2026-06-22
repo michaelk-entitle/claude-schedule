@@ -73,7 +73,8 @@ def test_non_cron_tool_silent(tmp_path, monkeypatch):
     assert _run({"hook_event_name": "PreToolUse", "tool_name": "Bash", "tool_input": {}}) is None
 
 
-def test_schedule_prompt_advisory(tmp_path, monkeypatch):
+def test_schedule_prompt_steers_to_local(tmp_path, monkeypatch):
     monkeypatch.setenv("CLAUDE_SCHEDULE_HOME", str(tmp_path))
     r = _run({"hook_event_name": "UserPromptSubmit", "prompt": "please /schedule this daily"})
-    assert "claude-schedule" in r["hookSpecificOutput"]["additionalContext"]
+    ctx = r["hookSpecificOutput"]["additionalContext"]
+    assert "claude-schedule add" in ctx  # steers to the local wrapper, not just a note

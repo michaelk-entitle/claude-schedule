@@ -89,8 +89,9 @@ keep-awake lock is released. `--timeout 0` disables it (not recommended for unat
   nothing.
 - Only **recurring clock-time** schedules are intercepted. Interval polls (`*/5 * * * *`)
   and one-shots are intentionally left to the native ephemeral loop.
-- `/schedule` (cloud Routines) is **not** intercepted — it runs remotely. You'll get a note
-  suggesting the local wrapper instead.
+- `/schedule` (cloud Routines) can't be hard-intercepted — its creation isn't a tool call,
+  so no hook fires on it. Instead the `UserPromptSubmit` hook steers Claude to set up a local
+  job when you type `/schedule`, unless you explicitly ask for cloud execution.
 
 ## Remove everything
 

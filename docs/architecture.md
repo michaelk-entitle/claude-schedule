@@ -80,8 +80,10 @@ cron does **not** catch up, so it's a fallback only.
   the user answers, Claude runs the command. Ephemeral interval/one-shot schedules are
   allowed through untouched. A 120s marker prevents a deny-loop if the user explicitly wants
   the ephemeral version (re-issuing the same schedule is then allowed).
-- **`UserPromptSubmit`.** If the prompt mentions `/schedule` (cloud Routines), it injects a
-  non-blocking note offering the local wrapper. Cloud routines are never blocked.
+- **`UserPromptSubmit`.** If the prompt mentions `/schedule` (cloud Routines), it injects
+  context steering Claude to set up a local job via `claude-schedule add` instead — unless
+  the user explicitly wants cloud execution. Cloud routine creation isn't a tool call (no
+  hook fires on it), so this is a steer, not a hard block.
 
 `hook.sh` fails safe: if the engine isn't installed, it exits 0 so native scheduling is
 never broken.

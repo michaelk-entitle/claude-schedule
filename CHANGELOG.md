@@ -15,8 +15,9 @@ Initial release.
   - `PreToolUse` hook on `CronCreate` — replaces ephemeral, session-scoped recurring
     schedules with a persistent OS-level job (asks for a timeout in chat first). Interval
     polls and one-shots pass through untouched; a 120s marker prevents a deny-loop.
-  - `UserPromptSubmit` hook — non-blocking note steering `/schedule` (cloud routines)
-    toward the local wrapper.
+  - `UserPromptSubmit` hook — steers `/schedule` (cloud routines) toward a persistent local
+    job via `claude-schedule add`, unless the user explicitly wants cloud execution. (Cloud
+    routine creation isn't a tool call, so this is a steer, not a hard block.)
 - **CLI engine** (`claude-schedule`), zero runtime dependencies:
   - Commands: `add`, `remove`, `list`, `run-now`, `logs`, `generate` (dry-run), `doctor`,
     plus `daily` / `weekdays` one-liners.

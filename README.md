@@ -55,14 +55,15 @@ At the scheduled time:
 5. The wake lock releases and the OS returns to normal idle sleep.
 
 Ephemeral things are left alone: short interval polls (`*/5 * * * *`) and one-shots pass
-through untouched, so Claude's own quick `/loop` keeps working. Cloud `/schedule` routines
-aren't blocked (they run remotely) — you just get a note offering the local wrapper instead.
+through untouched, so Claude's own quick `/loop` keeps working. Typing `/schedule` (cloud
+routines) steers Claude to set up a **local** job instead — unless you explicitly want cloud
+execution. (Cloud routine creation isn't a tool call, so this is a steer, not a hard block.)
 
 ---
 
-## Install
+## Quickstart
 
-The CLI engine (Python 3.10+, **zero runtime dependencies**):
+**1. Install the CLI** (Python 3.10+, **zero runtime dependencies**):
 
 ```bash
 pipx install claude-schedule        # recommended (isolated)
@@ -70,7 +71,7 @@ pipx install claude-schedule        # recommended (isolated)
 # or from source:  pipx install /path/to/claude-schedule
 ```
 
-The plugin (so schedule creation is auto-intercepted):
+**2. Install the plugin** so schedule creation is auto-intercepted:
 
 ```text
 # in Claude Code:
@@ -82,7 +83,28 @@ Prefer no plugin? Add the same hook to `~/.claude/settings.json` (see
 [docs/architecture.md](docs/architecture.md)). The plugin and CLI are independent — the
 plugin just shells out to `claude-schedule`.
 
-Check everything is wired up:
+**3. Schedule something** — just tell Claude what you want, no CLI by hand:
+
+> "review this repo every weekday at 9am and write a summary"
+
+With the plugin installed, the hook intercepts the schedule (and steers `/schedule` / `/loop`
+to local), asks you for a timeout, and installs a persistent local job for you.
+
+Driving the CLI directly works too:
+
+```bash
+claude-schedule daily 09:00 --name daily-review --repo ~/myproject \
+  --prompt "Review today's changes and write a short summary"
+```
+
+Either way it installs a persistent job and prints the one `sudo` command to enable
+wake-from-sleep (run it yourself, or pass `--arm-wake`). Try a job now without waiting:
+
+```bash
+claude-schedule run-now --name daily-review
+```
+
+**4. Check your setup** (OS, scheduler, wake, timeout support):
 
 ```bash
 claude-schedule doctor
