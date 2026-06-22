@@ -125,9 +125,8 @@ Then tell the user: it's installed, when it runs, the log path, and how to remov
 
 ## Scope & escape hatches
 
-- **macOS only.** On Linux/Windows, or for multi-job wake-slot management, fall back to the
-  full `claude-schedule` CLI if it's installed (`claude-schedule add …`), else tell the user
-  this seamless path is macOS-only for now.
+- **macOS only**, and one wake time at a time. Linux/Windows and multi-job wake-slot unions
+  aren't supported by this build — say so plainly rather than half-doing it.
 - **Wake-from-sleep, managed Macs (BeyondTrust EPM / MDM), DST/catch-up, removal:** read
   [reference.md](reference.md) before doing anything privileged. Default stays no-wake.
 - **Never** write a `sudoers` file or run a privileged command for the user — print it, they run it.

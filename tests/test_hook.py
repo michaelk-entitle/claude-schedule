@@ -2,9 +2,11 @@ import contextlib
 import io
 import json
 import sys
+from pathlib import Path
 
-from claude_schedule import hook
-from claude_schedule.hook import _cron_dow_to_days, _slug, parse_cron
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
+import hook  # noqa: E402
+from hook import _cron_dow_to_days, parse_cron  # noqa: E402
 
 
 def test_parse_cron_daily():
@@ -32,11 +34,6 @@ def test_dow_mapping():
     assert _cron_dow_to_days("1,3,5") == (0, 2, 4)
 
 
-def test_slug():
-    assert _slug("Review the repo now please") == "review-the-repo-now"  # first 4 words
-    assert _slug("") == "claude-job"
-
-
 def _run(data):
     sys.stdin = io.StringIO(json.dumps(data))
     buf = io.StringIO()
@@ -46,22 +43,22 @@ def _run(data):
     return json.loads(out) if out else None
 
 
-def test_recurring_denied(tmp_path, monkeypatch):
-    monkeypatch.setenv("CLAUDE_SCHEDULE_HOME", str(tmp_path))
+def test_recurring_denied_steers_to_skill(tmp_path, monkeypatch):
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
     r = _run({"hook_event_name": "PreToolUse", "tool_name": "CronCreate", "session_id": "a",
               "tool_input": {"cron": "0 9 * * *", "prompt": "do it", "recurring": True}})
     assert r["hookSpecificOutput"]["permissionDecision"] == "deny"
-    assert "claude-schedule add" in r["hookSpecificOutput"]["permissionDecisionReason"]
+    assert "claude-schedule skill" in r["hookSpecificOutput"]["permissionDecisionReason"]
 
 
 def test_interval_silent(tmp_path, monkeypatch):
-    monkeypatch.setenv("CLAUDE_SCHEDULE_HOME", str(tmp_path))
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
     assert _run({"hook_event_name": "PreToolUse", "tool_name": "CronCreate", "session_id": "b",
                  "tool_input": {"cron": "*/5 * * * *", "prompt": "x"}}) is None
 
 
 def test_retry_escape_hatch(tmp_path, monkeypatch):
-    monkeypatch.setenv("CLAUDE_SCHEDULE_HOME", str(tmp_path))
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
     data = {"hook_event_name": "PreToolUse", "tool_name": "CronCreate", "session_id": "c",
             "tool_input": {"cron": "0 9 * * *", "prompt": "x", "recurring": True}}
     assert _run(data) is not None  # first time: denied
@@ -69,12 +66,11 @@ def test_retry_escape_hatch(tmp_path, monkeypatch):
 
 
 def test_non_cron_tool_silent(tmp_path, monkeypatch):
-    monkeypatch.setenv("CLAUDE_SCHEDULE_HOME", str(tmp_path))
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
     assert _run({"hook_event_name": "PreToolUse", "tool_name": "Bash", "tool_input": {}}) is None
 
 
-def test_schedule_prompt_steers_to_local(tmp_path, monkeypatch):
-    monkeypatch.setenv("CLAUDE_SCHEDULE_HOME", str(tmp_path))
+def test_schedule_prompt_steers_to_skill(tmp_path, monkeypatch):
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
     r = _run({"hook_event_name": "UserPromptSubmit", "prompt": "please /schedule this daily"})
-    ctx = r["hookSpecificOutput"]["additionalContext"]
-    assert "claude-schedule add" in ctx  # steers to the local wrapper, not just a note
+    assert "claude-schedule skill" in r["hookSpecificOutput"]["additionalContext"]

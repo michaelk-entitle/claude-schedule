@@ -1,8 +1,8 @@
 {
   "name": "claude-schedule",
   "version": "0.1.0",
-  "description": "Intercepts Claude Code schedule creation and turns ephemeral /loop jobs into persistent local jobs that wake the machine, keep it awake during the run, and time out cleanly.",
+  "description": "Turn \"run X every weekday at 9am\" into a persistent local launchd job on your Mac: a skill that writes the job from Bash, plus a hook that steers ephemeral /loop and remote /schedule toward local. Nothing to install beyond the plugin.",
   "author": { "name": "Michael Kosoy" },
   "homepage": "https://github.com/michaelk-entitle/claude-schedule",
-  "keywords": ["scheduler", "launchd", "cron", "systemd", "wake", "automation"]
+  "keywords": ["scheduler", "launchd", "macos", "claude-code", "automation"]
 }

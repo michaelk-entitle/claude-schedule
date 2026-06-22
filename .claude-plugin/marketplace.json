@@ -5,7 +5,7 @@
     {
       "name": "claude-schedule",
       "source": "./",
-      "description": "Persistent local schedules for Claude Code jobs (wake + keep-awake + timeout)."
+      "description": "Persistent local schedules for Claude Code jobs on macOS (launchd, keep-awake, timeout; wake opt-in)."
     }
   ]
 }

@@ -1,13 +1,15 @@
 ---
-description: Show local scheduled Claude jobs and environment readiness (claude-schedule)
-allowed-tools: Bash(claude-schedule *)
+description: List your local claude-schedule launchd jobs and their runners/logs
+allowed-tools: Bash(launchctl list*), Bash(ls *)
 ---
 
-Current local scheduled Claude jobs and environment readiness:
+Your local claude-schedule jobs (launchd):
 
-!`claude-schedule list 2>/dev/null || echo "(claude-schedule not installed — see the plugin README)"`
+!`launchctl list 2>/dev/null | grep -i claude-schedule || echo "(no claude-schedule jobs installed)"`
 
-!`claude-schedule doctor 2>/dev/null || true`
+Runners & logs:
 
-To add, test, remove, or inspect a job, use the `claude-schedule` skill or the CLI directly
-(`claude-schedule add|run-now|logs|remove`). $ARGUMENTS
+!`ls -1 ~/Library/"Application Support"/claude-schedule/ 2>/dev/null || echo "(none yet)"`
+
+To create, test, or remove a job, just say what you want (e.g. "run X every weekday at 9am") —
+the claude-schedule skill handles it from there. $ARGUMENTS

@@ -4,66 +4,24 @@
 ![Dependencies](https://img.shields.io/badge/runtime%20deps-none-brightgreen.svg)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
 
-Run Claude Code jobs on a **local** schedule — on your own computer, with full repo
-access and local MCP servers, without cloud sandbox limits. The machine wakes itself,
-runs the job, stays awake only while it runs, then goes back to sleep.
+A Claude Code plugin that turns *"run this every weekday at 9am"* into a **persistent local
+job on your Mac** — full repo + local file + MCP access, surviving the session closing and
+the machine sleeping. No cloud sandbox, **nothing to install** beyond the plugin.
 
-It comes in two halves:
+It's deliberately small: a **skill** (instructions) that writes a `launchd` job straight from
+Bash, plus a tiny **hook** that catches the moments where Claude would otherwise reach for an
+ephemeral `/loop` or a remote cloud routine.
 
-1. **A Claude Code plugin** that *automatically intercepts* schedule creation. When you
-   ask Claude to run something on a recurring schedule (the `/loop` → `CronCreate` path),
-   a hook steps in, asks you for a timeout, and installs a **persistent** OS-level job in
-   place of the ephemeral session-scoped one. You never call a CLI by hand.
-2. **A standalone CLI engine** (`claude-schedule`) that does the actual wrapping —
-   detects your OS, picks the right scheduler, sets up a wake (it prints the one privileged
-   command for you to run, or runs it with `--arm-wake`), keeps the machine awake during the
-   run, and enforces a timeout. You can also drive it directly.
-
-> **Why this exists:** Claude Code's built-in `/loop` jobs only fire while the session is
-> open and the machine is awake; cloud Routines run remotely and can't touch your local
-> repo or MCP servers. There is no built-in way to run a real headless `claude -p` on your
-> own machine on a timer that survives logout and sleep. This fills that gap.
+> **Why this exists:** `/loop` jobs die when the session ends; cloud `/schedule` routines run
+> remotely and can't touch your repo or local MCP servers. There was no built-in way to run a
+> real headless `claude -p` on your own machine, on a timer, that survives logout and sleep.
+> This fills that gap.
 
 ---
 
-## How the automatic layer works
+## Quickstart (macOS)
 
-```
-You: "review this repo every weekday at 9am and write a summary"
-      │
-      ▼
-Claude → CronCreate(0 9 * * 1-5, "review the repo…")
-      │
-      ▼  PreToolUse hook fires
-claude-schedule: ✋ denies the ephemeral schedule, tells Claude:
-      "Ask the user for a timeout, then run:
-       claude-schedule add --name review… --time 09:00 --days MTWRF --prompt '…' --timeout <TIMEOUT>"
-      │
-      ▼
-Claude: "What timeout should it have? (default 30m)"  →  you answer  →  Claude runs the command
-      │
-      ▼
-A persistent launchd job is installed; the one-time wake command is printed for you. Done.
-```
-
-At the scheduled time:
-
-1. `pmset` (macOS) / `rtcwake` (Linux) / Task Scheduler WakeToRun (Windows) **wakes** the machine.
-2. `launchd` / `systemd` / `cron` / `schtasks` **starts** the job.
-3. `caffeinate` (macOS) / `systemd-inhibit` (Linux) **keeps it awake** only while it runs.
-4. `claude -p` runs in your repo with full context; a built-in **timeout** stops a runaway run.
-5. The wake lock releases and the OS returns to normal idle sleep.
-
-Ephemeral things are left alone: short interval polls (`*/5 * * * *`) and one-shots pass
-through untouched, so Claude's own quick `/loop` keeps working. Typing `/schedule` (cloud
-routines) steers Claude to set up a **local** job instead — unless you explicitly want cloud
-execution. (Cloud routine creation isn't a tool call, so this is a steer, not a hard block.)
-
----
-
-## Quickstart
-
-**macOS: install the plugin — that's the only step.**
+**Install the plugin — that's the only step.**
 
 ```text
 # in Claude Code:
@@ -75,161 +33,91 @@ Then just say what you want — no CLI, no `pip install`:
 
 > "review this repo every weekday at 9am and write a summary"
 
-The bundled **skill** turns that into a persistent local `launchd` job for you (asks only
-for a timeout), and fires it once as a smoke test. It works straight from Bash — there's no
-engine to install. By default it's **no-wake**: zero `sudo`, the job runs whenever the
-machine is next awake. Wake-from-sleep is an opt-in you arm once (see below).
+The bundled **skill** turns that into a persistent local `launchd` job (it asks only for a
+timeout) and fires it once as a smoke test. By default it's **no-wake**: zero `sudo` — the
+job runs whenever the machine is next awake. Wake-from-sleep is an opt-in you arm once.
 
-**Linux / Windows, or the full CLI** (cross-platform backends, wake-slot management, dry-run):
+---
 
-```bash
-pipx install claude-schedule          # Python 3.10+, zero runtime deps
-claude-schedule daily 09:00 --name daily-review --repo ~/myproject \
-  --prompt "Review today's changes and write a short summary"
-claude-schedule run-now --name daily-review   # test now, without waiting
+## How it works
+
+```
+You: "review this repo every weekday at 9am"
+      │
+      ▼  the claude-schedule skill activates
+Claude → writes a LaunchAgent + runner script from Bash, loads it with launchctl,
+         and kickstarts one run to prove it works. Asks you only for a timeout.
 ```
 
-The plugin and CLI are independent. On macOS the skill handles the happy path with nothing
-installed; the CLI is the cross-platform engine and is what `/loop`'s `CronCreate` hook uses.
+Three things keep it on the rails:
 
-**4. Check your setup** (OS, scheduler, wake, timeout support):
+1. **The skill** (`skills/claude-schedule/`) does the work: classifies the request (a
+   sub-hourly `every 5 min` → that's a `crontab`/`loop`, not this; local files → a local job;
+   pure remote analysis → cloud is fine), then emits a `launchd` job — `caffeinate` keeps the
+   Mac awake for the run, a pure-shell timeout guard bounds it, and `launchctl kickstart`
+   smoke-tests it.
+2. **A `PreToolUse` hook on `CronCreate`** catches a recurring `/loop`: it denies the
+   ephemeral, session-scoped cron and tells Claude to use the skill for a persistent job
+   instead. Short interval polls and one-shots pass through untouched.
+3. **A `UserPromptSubmit` hook on `/schedule`** steers Claude to a local job rather than a
+   remote cloud routine — unless you explicitly ask for cloud. (Cloud routine creation isn't a
+   tool call, so this is a steer, not a hard block.)
+
+The hook is one stdlib-only Python file (`scripts/hook.py`); it fails safe — if anything is
+off, it exits 0 and never blocks native scheduling.
+
+---
+
+## Permissions & wake
+
+- **Default: no-wake, no `sudo`.** The job runs if the machine is awake at the time; launchd
+  runs a missed job on the next wake. Most setups (machine on, or display-only sleep) need
+  nothing privileged.
+- **Wake-from-sleep is opt-in.** Arming the macOS wake slot needs root *once* —
+  `sudo pmset repeat wakeorpoweron …`, a **repeating** wake, so that single arm covers every
+  future run and the scheduled runs themselves are 100% `sudo`-free. The skill **prints** the
+  command for you to run; it never runs `sudo` for you and never writes a `sudoers` file.
+- **Managed Macs (BeyondTrust EPM / MDM):** the `sudo` prompt is corporate policy (a
+  "Confirm Operation" dialog), not a password a local `sudoers` rule can suppress — the fix is
+  asking IT to whitelist `pmset`. The skill detects this and says so. See
+  [`skills/claude-schedule/reference.md`](skills/claude-schedule/reference.md).
+- Unattended runs use `--permission-mode auto`: autonomous on safe steps, aborts on risky ones.
+
+## Removing a job
 
 ```bash
-claude-schedule doctor
+NAME=daily-review; LABEL=com.claude-schedule.$NAME
+launchctl bootout "gui/$(id -u)/$LABEL" 2>/dev/null
+rm -f ~/Library/LaunchAgents/$LABEL.plist \
+      ~/Library/"Application Support"/claude-schedule/$NAME.{sh,log}
+# if you armed a wake and no other job needs it: sudo pmset repeat cancel
 ```
 
----
+## Scope & limitations
 
-## Manual CLI usage
-
-You normally won't need this, but the full engine is yours to drive:
-
-```bash
-# Full form
-claude-schedule add \
-  --name daily-repo-review \
-  --time 09:00 \
-  --days weekdays \
-  --wake-before 1m \
-  --timeout 30m \
-  --repo /path/to/repo \
-  --prompt "Review the repo, find issues, and write a summary"
-
-# One-liners
-claude-schedule daily   09:00 --name nightly --repo ~/proj --prompt "Run my local Claude job"
-claude-schedule weekdays 08:30 --name standup --repo ~/proj --prompt "Summarize overnight changes"
-```
-
-Other commands:
-
-| Command | Purpose |
-|---|---|
-| `claude-schedule list` | list jobs and whether each is installed |
-| `claude-schedule run-now --name X` | run a job immediately (ignores schedule) |
-| `claude-schedule logs --name X` | show the tail of a job's log |
-| `claude-schedule remove --name X` | uninstall a job (and update the wake slot) |
-| `claude-schedule generate ...` | print the exact plist/crontab/units + wake command (dry run) |
-| `claude-schedule doctor` | OS / scheduler / wake / timeout support and gotchas |
-
-Add `--dry-run` to `add` to preview without changing anything.
-
-### Useful flags
-
-| Flag | Default | Notes |
-|---|---|---|
-| `--time HH:MM` | — | 24-hour local time |
-| `--days` | `daily` | `MTWRFSU` letters, or `daily` / `weekdays` / `weekends` |
-| `--timeout` | `30m` | `30m`, `1h`, `1h30m`, `90s`, or `0` for none |
-| `--wake-before` | `1m` | wake this long before the run |
-| `--no-wake` | off | don't arm a wake at all (rely on scheduler catch-up) |
-| `--arm-wake` | off | run the privileged wake command for you (one sudo prompt); default prints it to run yourself |
-| `--repo` | cwd | working directory for the run |
-| `--prompt` / `--prompt-file` | — | the task (exactly one) |
-| `--permission-mode` | `auto` | `auto` / `default` / `acceptEdits` / `plan` / `bypassPermissions` (see below) |
-| `--allowed-tools` | — | e.g. `"Bash(git *),Read,Edit"` |
-| `--model` | claude default | `sonnet` / `opus` / `haiku` / `fable` or full name |
-| `--bare` | off | skip repo CLAUDE.md/MCP/hooks (needs `ANTHROPIC_API_KEY`) |
-| `--env-file` | — | `KEY=VALUE` file loaded before the run |
-| `--backend` | auto | force `launchd` / `cron` / `systemd` / `schtasks` |
-| `--claude` | auto-detected | path to the `claude` binary |
-
----
-
-## Permissions (important for unattended runs)
-
-Scheduled jobs default to **`--permission-mode auto`**: Claude acts autonomously on safe
-steps and **aborts** on anything risky (it does *not* hang — there's no one to prompt). This
-keeps unattended jobs useful out of the box without the all-or-nothing
-`--dangerously-skip-permissions` bypass. To change the posture:
-
-- `--permission-mode default` — read-only; aborts on the first action needing approval.
-- `--permission-mode plan` — dry-run only, makes no changes.
-- `--allowed-tools "Bash(git *),Read,Edit"` — narrow the autonomy to specific tools.
-
-Stored data is private by default. Job specs and logs live under `~/.config/claude-schedule`
-(`%APPDATA%` on Windows) with owner-only permissions (`0700` dirs, `0600` files), so your
-prompts and run output aren't readable by other local users on a shared machine. And arming a
-wake never goes through claude-schedule — `sudo` reads your password directly (see below).
-
----
-
-## Platform support
-
-| OS | Scheduler | Wake | Keep-awake |
-|---|---|---|---|
-| macOS (Apple Silicon / Intel) | **launchd** (cron fallback) | `pmset repeat wakeorpoweron` | `caffeinate` |
-| Linux | **systemd** user timer (cron fallback) | `rtcwake` (best-effort) | `systemd-inhibit` |
-| Windows | Task Scheduler (`schtasks`) | task `-WakeToRun` | `SetThreadExecutionState` |
-
-### The hard truth about sleep vs. shutdown
-
-- **Asleep** → the machine can wake itself for a job. ✅
-- **Fully shut down / powered off** → **Apple Silicon cannot auto-power-on.** "Off" must
-  mean *asleep*. This is a hardware limitation, not a bug. Keep laptops on **AC power**
-  (lid-closed on AC is fine).
-- macOS exposes exactly **one** repeating wake slot; claude-schedule manages it as the
-  union of all your wake-enabled jobs. Arming it needs root, so by default `add` **prints**
-  the one `sudo pmset …` command for you to run yourself (pass `--arm-wake` to have it run
-  for you). **claude-schedule never sees or stores your password** — `sudo` reads it directly
-  from the terminal, same as Homebrew. See [troubleshooting](docs/troubleshooting.md).
-- On Linux, user `systemd` timers can't wake the machine; reliable wake needs a BIOS/RTC
-  schedule. The timer uses `Persistent=true`, so a missed run fires as soon as the machine
-  is next awake.
-
-See [docs/troubleshooting.md](docs/troubleshooting.md) for fixes to common issues, and
-[docs/architecture.md](docs/architecture.md) for the design.
-
----
-
-## Limitations
-
-- Apple Silicon can't power on from a full shutdown (sleep only).
-- One macOS `pmset repeat` slot is shared system-wide; multiple jobs at different times
-  wake for the earliest and rely on the scheduler's catch-up for the rest.
-- Linux self-wake is best-effort (no clean unattended re-arm without root).
-- The Windows backend is implemented but lightly tested.
-- The exact `CronCreate` tool-input keys aren't documented; the hook parses defensively and
-  fails safe (does nothing) if it can't read the schedule.
+- **macOS / `launchd` only**, clock-time daily/weekly. Sub-hourly intervals route to
+  `crontab` or `/loop`; Linux/Windows aren't supported by this minimal build.
+- **Apple Silicon can't power on from a full shutdown** — "off" must mean *asleep*. Keep
+  laptops on AC power.
+- The `/schedule` steer is a steer, not a guarantee (it relies on Claude honoring the
+  injected instruction). `/loop`'s `CronCreate` *is* hard-intercepted.
+- A single macOS wake slot is shared system-wide; multiple wake jobs at different times aren't
+  unioned by this build.
 
 ## Development
 
 ```bash
-pip install -e ".[dev]"
-pytest            # tests
-ruff check .      # lint
-mypy claude_schedule   # types
+pip install ruff mypy pytest
+ruff check .          # lint
+mypy scripts/hook.py  # types
+pytest                # hook logic (cron parsing, steers)
 ```
 
-CI runs these on macOS + Linux across Python 3.10–3.13 (see `.github/workflows/ci.yml`).
+CI runs these on Linux across Python 3.10 + 3.13 (`.github/workflows/ci.yml`).
 
 ## Contributing
 
-Contributions welcome — see [CONTRIBUTING.md](CONTRIBUTING.md). Changes that keep the tool
-dependency-free and the diff small are the easiest to merge.
-
-## Changelog
-
-See [CHANGELOG.md](CHANGELOG.md).
+See [CONTRIBUTING.md](CONTRIBUTING.md). Keep it dependency-free and the diff small.
 
 ## License
 
