@@ -63,15 +63,7 @@ execution. (Cloud routine creation isn't a tool call, so this is a steer, not a 
 
 ## Quickstart
 
-**1. Install the CLI** (Python 3.10+, **zero runtime dependencies**):
-
-```bash
-pipx install claude-schedule        # recommended (isolated)
-# or:  pip install claude-schedule
-# or from source:  pipx install /path/to/claude-schedule
-```
-
-**2. Install the plugin** so schedule creation is auto-intercepted:
+**macOS: install the plugin — that's the only step.**
 
 ```text
 # in Claude Code:
@@ -79,30 +71,26 @@ pipx install claude-schedule        # recommended (isolated)
 /plugin install claude-schedule@claude-schedule
 ```
 
-Prefer no plugin? Add the same hook to `~/.claude/settings.json` (see
-[docs/architecture.md](docs/architecture.md)). The plugin and CLI are independent — the
-plugin just shells out to `claude-schedule`.
-
-**3. Schedule something** — just tell Claude what you want, no CLI by hand:
+Then just say what you want — no CLI, no `pip install`:
 
 > "review this repo every weekday at 9am and write a summary"
 
-With the plugin installed, the hook intercepts the schedule (and steers `/schedule` / `/loop`
-to local), asks you for a timeout, and installs a persistent local job for you.
+The bundled **skill** turns that into a persistent local `launchd` job for you (asks only
+for a timeout), and fires it once as a smoke test. It works straight from Bash — there's no
+engine to install. By default it's **no-wake**: zero `sudo`, the job runs whenever the
+machine is next awake. Wake-from-sleep is an opt-in you arm once (see below).
 
-Driving the CLI directly works too:
+**Linux / Windows, or the full CLI** (cross-platform backends, wake-slot management, dry-run):
 
 ```bash
+pipx install claude-schedule          # Python 3.10+, zero runtime deps
 claude-schedule daily 09:00 --name daily-review --repo ~/myproject \
   --prompt "Review today's changes and write a short summary"
+claude-schedule run-now --name daily-review   # test now, without waiting
 ```
 
-Either way it installs a persistent job and prints the one `sudo` command to enable
-wake-from-sleep (run it yourself, or pass `--arm-wake`). Try a job now without waiting:
-
-```bash
-claude-schedule run-now --name daily-review
-```
+The plugin and CLI are independent. On macOS the skill handles the happy path with nothing
+installed; the CLI is the cross-platform engine and is what `/loop`'s `CronCreate` hook uses.
 
 **4. Check your setup** (OS, scheduler, wake, timeout support):
 

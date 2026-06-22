@@ -11,6 +11,15 @@ All notable changes to this project are documented here. The format follows
 Initial release.
 
 ### Added
+- **Seamless skill (macOS, no install).** The bundled `claude-schedule` skill turns a
+  natural-language or `/schedule` request into a persistent `launchd` job directly from Bash
+  — no Python engine to install, plugin-present is enough. It classifies the request first
+  (routes sub-hourly to cron/`loop`, local-path work to a local job, off-machine analysis to
+  cloud), infers name/repo/days/time and asks only the timeout, defaults to **no-wake** (zero
+  `sudo`), keeps the run awake with `caffeinate`, guards the timeout in pure shell, and
+  smoke-tests with `launchctl kickstart`. Wake-from-sleep and managed-Mac (BeyondTrust EPM)
+  handling are opt-in and documented in the skill's `reference.md`. macOS-only; other
+  platforms use the CLI.
 - **Claude Code plugin** that intercepts schedule creation:
   - `PreToolUse` hook on `CronCreate` — replaces ephemeral, session-scoped recurring
     schedules with a persistent OS-level job (asks for a timeout in chat first). Interval

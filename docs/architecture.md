@@ -4,6 +4,14 @@ Two cleanly separated halves: a **plugin front door** (hook) and a **CLI engine*
 plugin only steers Claude with text and shells out to the engine; the engine does all the
 real work and is fully usable on its own.
 
+> **macOS seamless path (no engine).** The bundled `claude-schedule` skill
+> (`skills/claude-schedule/SKILL.md`) can also emit a `launchd` job *directly from Bash* —
+> a runner script + LaunchAgent, `caffeinate` keep-awake, a pure-shell timeout guard,
+> `launchctl bootstrap`/`kickstart` — with no Python engine installed. It's a deliberately
+> small, launchd-only, single-wake-time subset for the happy path; the CLI engine below is
+> the cross-platform superset (Linux/systemd, Windows/schtasks, the multi-job wake-slot
+> union). The two are independent; on macOS, plugin-installed-alone is enough.
+
 ## Module map
 
 ```
