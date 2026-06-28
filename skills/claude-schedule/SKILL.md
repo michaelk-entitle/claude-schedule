@@ -1,66 +1,70 @@
 ---
 name: claude-schedule
-description: Use when the user wants a recurring Claude Code job to run on THIS macOS machine at a clock time — "run X every weekday at 9am", a daily/weekly task that must survive closing the session, full repo + local file access — or types /schedule, or a recurring /loop, or the CronCreate hook fires. macOS / launchd. Not for sub-hourly intervals or cloud routines.
+description: Schedule a Claude Code job to run on THIS Mac on a recurring clock schedule — "run X every weekday at 9am", tasks that must survive the session closing, or tasks that need local repo + file access. macOS/launchd only. Can wake the Mac from sleep (not from full power-off). Invoke when the user says /schedule, wants a recurring /loop that persists, or asks to "run X every [day/time]".
 ---
 
-# claude-schedule — seamless local schedules
+# claude-schedule — persistent local Claude jobs on macOS
 
-Turn a scheduling request into a **persistent local launchd job** on macOS, directly from
-Bash. **Nothing to install** — no `pip`, no CLI, no engine. The plugin being present is
-enough. `/loop` is session-scoped (dies when the session ends) and cloud `/schedule` routines
-run in a remote sandbox with no access to the user's disk; this fills the gap: a real
-`claude -p` on a clock schedule, on the user's machine, that survives logout and sleep.
+Turn "run this every weekday at 9am" into a real launchd job that survives session close and sleep — using only Bash, nothing to install.
 
-**Infer and act — confirm once.** The failure mode this skill exists to prevent is bouncing
-the user through tool-picker modals. Run the classifier silently, state the routing decision
-in one line, ask at most one question (the timeout), then install.
+**Infer and act.** Ask at most one question (timeout). Don't open modals or list options.
 
-## Step 0 — Classify the request (do this first, silently)
+---
 
-| Signal in the request | Route |
+## Step 0 — classify (one-line echo)
+
+| Request | Route |
 |---|---|
-| Interval **< 1 hour** (`every 5 min`, `*/15`) | **Not a persistent local job** — neither this nor cloud does sub-hourly. Offer a plain `crontab` one-liner or session `/loop`. Say so once, stop. |
-| Touches a **local path / repo / local MCP** | **Local job (this skill).** A cloud sandbox can't reach the user's disk. |
-| Pure remote analysis, **≥ 1h**, no local deps | Either works → **default local**; mention cloud `/schedule` only if they want off-machine. |
-| **Clock-time, persistent, local** | **Local job (this skill).** The happy path. |
+| Interval < 1 hour | Not this skill. Offer a plain `crontab` line or `/loop`. Say so once, stop. |
+| Needs local repo / local MCP | **This skill.** Cloud sandbox can't reach the disk. |
+| Pure remote, ≥ 1h | Default to this skill; mention cloud `/schedule` only if asked. |
+| Clock-time, persistent, local | **This skill.** Happy path. |
 
-Echo it in one line ("local + sub-hourly → that's a `crontab` line, not a Claude job") — do
-**not** open a modal to ask which tool.
+---
 
-## Step 1 — Infer, ask at most one thing
+## Step 1 — infer, ask at most one thing
 
-Infer from the request: **name** (slug of the task), **repo** (cwd unless stated), **days**
-+ **time** (from the phrasing), **model** (default), **permission-mode** (`auto`). Ask **only**
-the **timeout** if the user didn't give one (suggest `30m`). Don't ask anything else.
+From the request infer:
+- **NAME** — slug (e.g. `daily-review`)
+- **HOUR / MIN** — 24h clock
+- **WEEKDAYS** — launchd numbers: Mon=1 Tue=2 Wed=3 Thu=4 Fri=5 Sat=6 Sun=0; weekdays = `1 2 3 4 5`; every day = `""`
+- **REPO** — cwd unless stated
+- **PERM** — default `auto`
+- **PROMPT** — the `claude -p` prompt text
 
-Day → launchd weekday number: Mon=1 Tue=2 Wed=3 Thu=4 Fri=5 Sat=6 Sun=0. `weekdays`=`1 2 3 4 5`.
+Ask **only** the timeout if not given. Suggest `30m`. Don't ask anything else.
 
-## Step 2 — Install the job (verified recipe)
+---
 
-Fill the variables, then run as-is. This emits a runner script + a LaunchAgent and loads it.
-**Default is no-wake** (no `sudo`, no prompt): the job runs if the machine is awake at the
-time, and launchd runs a missed job on the next wake. (Wake-from-sleep is opt-in — see
-[reference.md](reference.md).)
+## Step 2 — install the job
+
+Fill in the variables, then run the block as-is. The runner needs no privileges — `caffeinate` keeps the Mac awake during the run, a pure-shell guard bounds it by `$TIMEOUT`. Waking the Mac from sleep is handled separately in Step 4 (no daily sudo).
 
 ```bash
-NAME="daily-review"                  # slug
-HOUR=9; MIN=0                        # 24h clock time
-WEEKDAYS="1 2 3 4 5"                 # launchd nums; "" = every day; weekdays = 1 2 3 4 5
-REPO="$HOME/Projects/myrepo"         # working dir for the run
-TIMEOUT=1800                         # seconds (30m)
-PROMPT='Review today’s changes and write a short summary.'
-PERM=auto                            # auto | acceptEdits | default | plan
+NAME="daily-review"
+HOUR=9; MIN=0
+WEEKDAYS="1 2 3 4 5"          # "" = every day
+REPO="$HOME/Projects/myrepo"
+TIMEOUT=1800                   # seconds
+PROMPT='Review today'\''s changes and post a summary.'
+PERM=auto                      # auto | acceptEdits | default | plan
 
-# resolve the real claude binary (the `claude` you type may be a shell function)
+# resolve real claude binary
 CLAUDE="$(command -v claude 2>/dev/null)"
-case "$CLAUDE" in /*) ;; *) for c in "$HOME/.local/bin/claude" /opt/homebrew/bin/claude /usr/local/bin/claude; do [ -x "$c" ] && CLAUDE="$c" && break; done;; esac
+case "$CLAUDE" in /*) ;; *)
+  for c in "$HOME/.local/bin/claude" /opt/homebrew/bin/claude /usr/local/bin/claude; do
+    [ -x "$c" ] && CLAUDE="$c" && break
+  done;;
+esac
 
 LABEL="com.claude-schedule.$NAME"
 DIR="$HOME/Library/Application Support/claude-schedule"; mkdir -p "$DIR"
 RUN="$DIR/$NAME.sh"; LOG="$DIR/$NAME.log"
 PLIST="$HOME/Library/LaunchAgents/$LABEL.plist"
 
-# runner: caffeinate keeps the mac awake for the run; pure-shell timeout guard (no timeout/gtimeout dep)
+# runner: caffeinate keeps the Mac awake for the run; pure-shell timeout guard (no deps, no sudo)
+# For a long prompt with quotes, write it to "$DIR/$NAME.prompt.md" and use
+#   "$CLAUDE" -p "$(cat '$DIR/$NAME.prompt.md')" ...   instead of the inline PROMPT.
 cat > "$RUN" <<RUNNER
 #!/bin/sh
 cd "$REPO" 2>/dev/null
@@ -74,8 +78,7 @@ exit \$rc
 RUNNER
 chmod +x "$RUN"
 
-# StartCalendarInterval: one dict for daily, an array of dicts for specific weekdays.
-# (tr+read splits portably — zsh doesn't word-split an unquoted $WEEKDAYS)
+# build StartCalendarInterval XML
 INTERVAL=""
 while IFS= read -r wd; do
   [ -n "$wd" ] || continue
@@ -99,34 +102,72 @@ cat > "$PLIST" <<PLIST
   <key>StandardOutPath</key><string>$LOG</string>
   <key>StandardErrorPath</key><string>$LOG</string>
   <key>EnvironmentVariables</key><dict>
-    <key>PATH</key><string>$(dirname "$CLAUDE"):/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+    <key>PATH</key><string>/Users/$USER/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
     <key>HOME</key><string>$HOME</string>
   </dict>
 </dict></plist>
 PLIST
 
 if plutil -lint "$PLIST" >/dev/null; then
-  launchctl bootout "gui/$(id -u)/$LABEL" 2>/dev/null   # replace any prior copy
+  launchctl bootout "gui/$(id -u)/$LABEL" 2>/dev/null
   launchctl bootstrap "gui/$(id -u)" "$PLIST" && echo "installed $LABEL ($HOUR:$MIN, log: $LOG)"
-else echo "plist invalid — not installing"; fi
+else
+  echo "plist invalid — not installing"; cat "$PLIST"
+fi
 ```
 
-## Step 3 — Smoke-test now, then report
+---
 
-Don't make the user wait until the scheduled time — fire it once and show the log:
+## Step 3 — smoke-test
+
+Fire it once immediately, then show the log tail:
 
 ```bash
-launchctl kickstart -k "gui/$(id -u)/com.claude-schedule.$NAME"   # runs it now
-sleep 1; tail -n 20 "$HOME/Library/Application Support/claude-schedule/$NAME.log"
+launchctl kickstart -k "gui/$(id -u)/com.claude-schedule.$NAME"
+sleep 2
+tail -n 20 "$HOME/Library/Application Support/claude-schedule/$NAME.log"
 ```
 
-Then tell the user: it's installed, when it runs, the log path, and how to remove it
-(`launchctl bootout "gui/$(id -u)/com.claude-schedule.$NAME"` + delete the plist & runner).
+Tell the user: job installed, next scheduled run, log path, how to remove (Step 5).
 
-## Scope & escape hatches
+---
 
-- **macOS only**, and one wake time at a time. Linux/Windows and multi-job wake-slot unions
-  aren't supported by this build — say so plainly rather than half-doing it.
-- **Wake-from-sleep, managed Macs (BeyondTrust EPM / MDM), DST/catch-up, removal:** read
-  [reference.md](reference.md) before doing anything privileged. Default stays no-wake.
-- **Never** write a `sudoers` file or run a privileged command for the user — print it, they run it.
+## Step 4 — wake from sleep (batch pre-arm — one approval per job, no IT)
+
+**Default is no-wake**: the job runs if the Mac is awake at its time; launchd runs a missed job on the next wake. Offer wake only if the user wants the Mac to wake *itself*.
+
+> **Apple Silicon: wakes from sleep only — cannot power on from a full shutdown. Keep the Mac on AC power (lid-closed on AC is fine).**
+
+**How it works — and why this approach.** `pmset schedule` holds a *list* of one-time wake entries (unlike `pmset repeat`, which has a single global slot). So this job pre-arms many days of wakes at its own time in **one `sudo` call** = **one approval**. Multiple jobs at different times each pre-arm their own entries; they coexist — 3 jobs at 9:00 / 11:00 / 12:00 → 3 approvals total, once, at creation, and the Mac wakes at all three times.
+
+On a managed Mac (EPM / MDM) that one `sudo` triggers a "Confirm Operation" dialog the user approves by hand — **no passwordless sudoers, no IT request**. The runner itself never calls sudo (it's unattended and would be blocked), so there's no daily prompt.
+
+The pre-armed list covers a **horizon** (default 60 days), then lapses — re-run the same command to renew (one approval again). The wake fires **every day** at the time; the job still only *runs* on its scheduled `WEEKDAYS` because launchd enforces that — so a weekday-only job may wake the Mac on a weekend, find nothing to do, and idle back to sleep (a harmless extra wake, traded for a dead-simple command).
+
+Compute and print this job's batch command (the user runs it once and approves — **never run `sudo` yourself**):
+
+```bash
+HORIZON=60        # days of wakes to pre-arm in one approval
+TIME_STR=$(printf '%02d:%02d:00' "$HOUR" "$MIN")
+printf '\nRun once and approve the EPM dialog — pre-arms %d days of %s wakes for "%s":\n' "$HORIZON" "$TIME_STR" "$NAME"
+printf '  sudo sh -c '\''for d in $(seq 0 %d); do pmset schedule wakeorpoweron "$(date -v+${d}d "+%%m/%%d/%%y %s")"; done'\''\n' "$((HORIZON-1))" "$TIME_STR"
+printf '(One approval = %d days. Re-run to renew. Other jobs at other times keep their own wake entries — this only adds.)\n\n' "$HORIZON"
+```
+
+Inspect what's armed any time (no sudo): `pmset -g sched`
+
+---
+
+## Step 5 — remove a job
+
+```bash
+NAME="daily-review"; LABEL="com.claude-schedule.$NAME"
+launchctl bootout "gui/$(id -u)/$LABEL" 2>/dev/null
+rm -f "$HOME/Library/LaunchAgents/$LABEL.plist" \
+      "$HOME/Library/Application Support/claude-schedule/$NAME.sh" \
+      "$HOME/Library/Application Support/claude-schedule/$NAME.log" \
+      "$HOME/Library/Application Support/claude-schedule/$NAME.prompt.md"
+echo "removed $NAME"
+```
+
+The job's pre-armed wake entries simply lapse on their own. To clear pending wakes sooner, inspect with `pmset -g sched`; **note `sudo pmset schedule cancelall` clears *all* jobs' wake entries**, so only use it if no other claude-schedule job needs its wakes (then re-arm those from their Step 4).

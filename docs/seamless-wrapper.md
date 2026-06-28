@@ -23,7 +23,7 @@ Every item here is a real snag we hit, in order:
    is the single biggest "user had to do something" moment.
 5. **Wake needed `sudo`.** Real wake-from-sleep means arming the macOS wake slot, which needs
    root. We printed the command; the user ran it.
-6. **This is a *managed* Mac (BeyondTrust EPM).** The prompt the user hit was the corporate
+6. **This is a *managed* Mac (EPM).** The prompt the user hit was the corporate
    **"Confirm Operation" Yes/No**, not a Unix password. A local `sudoers` `NOPASSWD` rule
    *cannot* suppress that — it's central policy. The harness also (correctly) blocked us from
    writing a `sudoers` file at all.
@@ -92,7 +92,7 @@ just the **timeout** (and only if the user didn't say). Then install and report.
   display; launchd/systemd `Persistent` catch-up covers the rest. Zero privileged steps.
 - Offer wake-from-sleep as an **opt-in** ("want it to wake the machine? that's one `sudo` you
   run once, never again").
-- **Detect a managed Mac** (BeyondTrust EPM / Jamf / an MDM profile). If present, warn that
+- **Detect a managed Mac** (EPM / Jamf / an MDM profile). If present, warn that
   the privileged prompt is *corporate policy*, a local `sudoers` rule won't silence it, and
   the real fix is asking IT to whitelist `pmset repeat`.
 - **Never** write `sudoers` or run the privileged command for the user. Print it; they run

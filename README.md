@@ -73,15 +73,44 @@ off, it exits 0 and never blocks native scheduling.
 - **Default: no-wake, no `sudo`.** The job runs if the machine is awake at the time; launchd
   runs a missed job on the next wake. Most setups (machine on, or display-only sleep) need
   nothing privileged.
-- **Wake-from-sleep is opt-in.** Arming the macOS wake slot needs root *once* —
-  `sudo pmset repeat wakeorpoweron …`, a **repeating** wake, so that single arm covers every
-  future run and the scheduled runs themselves are 100% `sudo`-free. The skill **prints** the
-  command for you to run; it never runs `sudo` for you and never writes a `sudoers` file.
-- **Managed Macs (BeyondTrust EPM / MDM):** the `sudo` prompt is corporate policy (a
-  "Confirm Operation" dialog), not a password a local `sudoers` rule can suppress — the fix is
-  asking IT to whitelist `pmset`. The skill detects this and says so. See
-  [`skills/claude-schedule/reference.md`](skills/claude-schedule/reference.md).
+- **Wake-from-sleep is opt-in, via batch pre-arm.** The skill **prints** one `sudo pmset schedule`
+  loop you run *once at job creation* — it pre-arms a 60-day horizon of wakes at the job's time
+  (one approval per job). The scheduled runs themselves are 100% `sudo`-free; the skill never runs
+  `sudo` for you and never writes a `sudoers` file. Re-run the printed command to renew the horizon.
+- **Managed Macs (EPM / MDM):** the `sudo` prompt is corporate policy (a
+  "Confirm Operation" dialog). Wake-from-sleep uses **batch pre-arm** — one `sudo pmset schedule`
+  loop at job creation pre-arms a 60-day horizon of wakes (one approval per job, no IT, no daily
+  sudo). Multiple jobs at different times coexist. See Step 4 in
+  [`skills/claude-schedule/SKILL.md`](skills/claude-schedule/SKILL.md).
 - Unattended runs use `--permission-mode auto`: autonomous on safe steps, aborts on risky ones.
+
+## Listing your jobs
+
+Quick view of what's installed and whether it's loaded:
+
+```bash
+launchctl list | grep com.claude-schedule
+```
+
+With each job's scheduled time:
+
+```bash
+for p in ~/Library/LaunchAgents/com.claude-schedule.*.plist; do
+  name=$(basename "$p" .plist | sed 's/com.claude-schedule.//')
+  h=$(/usr/libexec/PlistBuddy -c "Print :StartCalendarInterval:Hour" "$p" 2>/dev/null \
+      || /usr/libexec/PlistBuddy -c "Print :StartCalendarInterval:0:Hour" "$p" 2>/dev/null)
+  m=$(/usr/libexec/PlistBuddy -c "Print :StartCalendarInterval:Minute" "$p" 2>/dev/null \
+      || /usr/libexec/PlistBuddy -c "Print :StartCalendarInterval:0:Minute" "$p" 2>/dev/null)
+  printf "  %-22s %02d:%02d\n" "$name" "${h:-0}" "${m:-0}"
+done
+```
+
+See a job's logs, or the wakes it pre-armed:
+
+```bash
+tail -n 40 ~/Library/"Application Support"/claude-schedule/<name>.log
+pmset -g sched          # scheduled wake events (no sudo needed to view)
+```
 
 ## Removing a job
 
@@ -89,9 +118,13 @@ off, it exits 0 and never blocks native scheduling.
 NAME=daily-review; LABEL=com.claude-schedule.$NAME
 launchctl bootout "gui/$(id -u)/$LABEL" 2>/dev/null
 rm -f ~/Library/LaunchAgents/$LABEL.plist \
-      ~/Library/"Application Support"/claude-schedule/$NAME.{sh,log}
-# if you armed a wake and no other job needs it: sudo pmset repeat cancel
+      ~/Library/"Application Support"/claude-schedule/$NAME.{sh,log,prompt.md}
 ```
+
+The job's pre-armed wake entries simply lapse on their own (they're one-time `pmset schedule`
+entries over a fixed horizon). To clear pending wakes sooner, inspect with `pmset -g sched`.
+Note: `sudo pmset schedule cancelall` clears **all** jobs' wake entries, so only use it if no
+other claude-schedule job still needs its wakes.
 
 ## Scope & limitations
 

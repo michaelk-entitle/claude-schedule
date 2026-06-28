@@ -20,8 +20,8 @@ CI runs these on Linux across Python 3.10 + 3.13.
 
 See [docs/architecture.md](docs/architecture.md). In short:
 
-- `skills/claude-schedule/` — the skill that writes the `launchd` job from Bash (`SKILL.md`)
-  plus the wake/managed-Mac/calibration detail (`reference.md`). Most behavior lives here.
+- `skills/claude-schedule/` — the self-contained skill (`SKILL.md`) that writes the `launchd`
+  job from Bash and handles wake-from-sleep (batch pre-arm). Most behavior lives here.
 - `scripts/hook.py` — the stdlib-only hook (CronCreate interception + `/schedule` steer),
   launched by `scripts/hook.sh` and wired in `hooks/hooks.json`.
 

@@ -37,7 +37,7 @@ it, and `sudo` reads the password directly. Same trust model as Homebrew. It nev
 - Default is **no-wake**. To wake from sleep, run the one command the skill printed:
   `sudo pmset repeat wakeorpoweron MTWRF 08:59:00` (a repeating wake — once covers all runs).
 - macOS has **one** repeating wake slot; check it with `pmset -g sched`.
-- **Managed Mac (BeyondTrust EPM / MDM):** the prompt is a corporate "Confirm Operation"
+- **Managed Mac (EPM / MDM):** the prompt is a corporate "Confirm Operation"
   dialog, not a password — a local `sudoers` rule can't suppress it. Ask IT to whitelist
   `pmset`. You can still use the job with no-wake.
 - Laptops on battery may sleep deeply; keep on AC for reliable wake.

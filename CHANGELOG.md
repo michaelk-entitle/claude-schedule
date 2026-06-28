@@ -6,6 +6,19 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.2.0]
+
+### Changed
+- Self-contained `SKILL.md` (no `reference.md`): folded wake guidance into the skill.
+- Wake-from-sleep reworked to **batch pre-arm** — one `sudo pmset schedule` loop at creation
+  pre-arms a 60-day horizon of wakes per job (one approval each), so multiple jobs at
+  different times coexist with no daily sudo. Replaces the self-re-arming/`pmset repeat`
+  approaches, which can't run unattended under managed-Mac (EPM) sudo prompts.
+- Runner no longer calls `sudo`.
+
+### Removed
+- `skills/claude-schedule/reference.md` (merged into `SKILL.md`).
+
 ## [0.1.0]
 
 Initial release.
@@ -20,7 +33,7 @@ Nothing to install beyond the plugin; no CLI engine.
   analysis → cloud), infers name/repo/days/time and asks only the timeout, defaults to
   **no-wake** (zero `sudo`), keeps the run awake with `caffeinate`, guards the timeout in pure
   shell (no `timeout`/`gtimeout` dep), runs at `--permission-mode auto`, and smoke-tests with
-  `launchctl kickstart`. Wake-from-sleep and managed-Mac (BeyondTrust EPM) handling are opt-in
+  `launchctl kickstart`. Wake-from-sleep and managed-Mac (EPM) handling are opt-in
   in the skill's `reference.md`. macOS / single-wake-time by design.
 - **Hook** (`scripts/hook.py`, stdlib only), wired by the plugin:
   - `PreToolUse` on `CronCreate` — denies a recurring, session-scoped `/loop` and steers

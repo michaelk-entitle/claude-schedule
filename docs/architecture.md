@@ -13,8 +13,7 @@ scripts/
   hook.sh              thin launcher: exec python3 hook.py (exit 0 if no python3)
   hook.py              the hook logic — stdlib only, ~210 LOC
 skills/claude-schedule/
-  SKILL.md             the seamless macOS path: classify → emit launchd → smoke-test
-  reference.md         wake opt-in, managed-Mac (EPM), calibration, removal
+  SKILL.md             classify → emit launchd → smoke-test → wake (batch pre-arm) → remove
 docs/                  this file + troubleshooting + the seamless-wrapper design note
 tests/test_hook.py     hook logic (cron parsing, the steers)
 ```
@@ -32,8 +31,8 @@ On a scheduling request the skill, straight from Bash:
    LaunchAgent plist with `StartCalendarInterval`, loaded via `launchctl bootstrap gui/$UID`.
 4. **Smoke-tests** with `launchctl kickstart -k` and tails the log.
 
-Default is **no-wake** (zero `sudo`). Wake-from-sleep, managed-Mac handling, calibration, and
-removal live in `reference.md` and are opt-in. macOS-only by design.
+Default is **no-wake** (zero `sudo`). Wake-from-sleep, managed-Mac (EPM) handling, and removal
+live in `SKILL.md` (Steps 4–5); wake uses batch pre-arm — one approval per job, no IT. macOS-only by design.
 
 ### Why launchd
 It survives reboots and runs missed `StartCalendarInterval` jobs on the next wake — built-in
